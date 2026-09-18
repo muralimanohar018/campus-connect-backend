@@ -1,0 +1,323 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Role {
+  id          String     @id @default(uuid())
+  name        RoleName   @unique
+  description String?
+  permissions Json?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  users       UserRole[]
+
+  @@map("roles")
+}
+
+model User {
+  id                    String            @id @default(uuid())
+  fullName              String
+  email                 String            @unique
+  passwordHash          String
+  phone                 String?
+  rollNumber            String?           @unique
+  department            String?
+  yearOfStudy           Int?
+  avatarUrl             String?
+  bio                   String?
+  status                UserStatus        @default(PENDING_VERIFICATION)
+  isEmailVerified       Boolean           @default(false)
+  lastLoginAt           DateTime?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  deletedAt             DateTime?
+  announcementsAuthored Announcement[]    @relation("AnnouncementAuthor")
+  attendanceRecords     Attendance[]
+  auditLogs             AuditLog[]
+  certificates          Certificate[]
+  galleryUploads        Gallery[]
+  leaderboardEntry      LeaderboardEntry?
+  notifications         Notification[]
+  refreshTokens         RefreshToken[]
+  registrations         Registration[]
+  badges                UserBadge[]
+  roles                 UserRole?
+
+  @@index([email])
+  @@index([status])
+  @@map("users")
+}
+
+model UserRole {
+  id         String   @id @default(uuid())
+  userId     String   @unique
+  roleId     String
+  assignedAt DateTime @default(now())
+  role       Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([roleId])
+  @@map("user_roles")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  userAgent String?
+  ipAddress String?
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@map("refresh_tokens")
+}
+
+model Event {
+  id                   String    @id @default(uuid())
+  title                String
+  slug                 String    @unique
+  description          String?
+  bannerUrl            String?
+  venue                String?
+  isOnline             Boolean   @default(false)
+  meetingLink          String?
+  startAt              DateTime
+  endAt                DateTime
+  registrationDeadline DateTime?
+  capacity             Int?
+  isPublished          Boolean   @default(false)
+
+  staffAttendanceQrToken   String?
+  studentAttendanceQrToken String?
+  attendanceQrGeneratedAt  DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  registrations Registration[]
+  attendance    Attendance[]
+  certificates  Certificate[]
+
+  @@index([slug])
+  @@index([startAt])
+  @@map("events")
+}
+
+model Registration {
+  id           String             @id @default(uuid())
+  userId       String
+  eventId      String
+  status       RegistrationStatus @default(PENDING)
+  registeredAt DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  event        Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, eventId])
+  @@index([eventId])
+  @@index([userId])
+  @@map("registrations")
+}
+
+model Attendance {
+  id        String           @id @default(uuid())
+  userId    String
+  eventId   String
+  status    AttendanceStatus @default(ABSENT)
+  checkInAt DateTime?
+  markedBy  String?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  event     Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, eventId])
+  @@index([eventId])
+  @@map("attendance")
+}
+
+model Certificate {
+  id              String            @id @default(uuid())
+  userId          String
+  eventId         String?
+  title           String
+  certificateUrl  String?
+  certificateHash String?           @unique
+  status          CertificateStatus @default(ISSUED)
+  issuedAt        DateTime          @default(now())
+  revokedAt       DateTime?
+  event           Event?            @relation(fields: [eventId], references: [id])
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([certificateHash])
+  @@map("certificates")
+}
+
+model Announcement {
+  id          String     @id @default(uuid())
+  title       String
+  content     String
+  authorId    String
+  targetRoles RoleName[]
+  isPinned    Boolean    @default(false)
+  isPublished Boolean    @default(false)
+  publishedAt DateTime?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  deletedAt   DateTime?
+
+  author User @relation("AnnouncementAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([isPublished])
+  @@map("announcements")
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  title     String
+  message   String
+  type      NotificationType @default(INFO)
+  isRead    Boolean          @default(false)
+  metadata  Json?
+  createdAt DateTime         @default(now())
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+model Gallery {
+  id         String   @id @default(uuid())
+  uploadedBy String
+  imageUrl   String
+  caption    String?
+  eventId    String?
+  createdAt  DateTime @default(now())
+  uploader   User     @relation(fields: [uploadedBy], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@map("gallery")
+}
+
+model Badge {
+  id          String      @id @default(uuid())
+  name        String      @unique
+  description String?
+  iconUrl     String?
+  criteria    Json?
+  createdAt   DateTime    @default(now())
+  users       UserBadge[]
+
+  @@map("badges")
+}
+
+model UserBadge {
+  id        String   @id @default(uuid())
+  userId    String
+  badgeId   String
+  awardedAt DateTime @default(now())
+  badge     Badge    @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, badgeId])
+  @@map("user_badges")
+}
+
+model LeaderboardEntry {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  points    Int      @default(0)
+  rank      Int?
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([points])
+  @@map("leaderboard_entries")
+}
+
+model AuditLog {
+  id        String      @id @default(uuid())
+  userId    String?
+  action    AuditAction
+  entity    String?
+  entityId  String?
+  metadata  Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime    @default(now())
+  user      User?       @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([entity, entityId])
+  @@map("audit_logs")
+}
+
+enum RoleName {
+  SUPER_ADMIN
+  ADMIN
+  CORE_TEAM
+  MEMBER
+  STUDENT
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  PENDING_VERIFICATION
+}
+
+enum RegistrationStatus {
+  PENDING
+  CONFIRMED
+  WAITLISTED
+  CANCELLED
+  ATTENDED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+enum CertificateStatus {
+  ISSUED
+  REVOKED
+  PENDING
+}
+
+enum NotificationType {
+  INFO
+  SUCCESS
+  WARNING
+  ERROR
+  EVENT
+  CERTIFICATE
+  ANNOUNCEMENT
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  LOGIN_FAILED
+  PASSWORD_CHANGE
+  ROLE_CHANGE
+  OTHER
+}
